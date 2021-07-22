@@ -9,22 +9,30 @@ import (
 )
 
 var (
-	addr               = flag.String("addr", "0.0.0.0:8080", "TCP address to listen to")
+	addr               = flag.String("addr", "0.0.0.0:3000", "TCP address to listen to")
 	dir                = flag.String("dir", "/var/www/html", "Directory to serve static files from")
 	generateIndexPages = flag.Bool("generateIndexPages", false, "Whether to generate directory index pages")
 	spaMode            = flag.Bool("spaMode", false, "Single Page Application Mode")
 )
 
 func main() {
+	const API_CONTENT_TYPE = "application/vnd.brickdoc.app-engine+json; charset=utf8"
 	flag.Parse()
 
-	// Setup FS handler
+	// Setup Fasthttp file server handler
+
+	notFoundHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetContentType(API_CONTENT_TYPE)
+		ctx.SetBodyString("{\"error\": \"Resource Not found\", \"handler\":\"WrapDrive Static Server (Brickdoc App Engine)\"}")
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	}
 
 	fs := &fasthttp.FS{
 		Root:               *dir,
 		IndexNames:         []string{"index.html"},
 		GenerateIndexPages: *generateIndexPages,
-		// gzip compress by nginx ingress or load balancing.
+		PathNotFound:       notFoundHandler,
+		// Gzip and brotil compress by ingress or load balancing.
 		Compress:        false,
 		AcceptByteRange: true,
 	}
@@ -38,7 +46,7 @@ func main() {
 	requestHandler := func(ctx *fasthttp.RequestCtx) {
 
 		if string(ctx.Path()) == "/healthz" {
-			ctx.SetContentType("text/plain; charset=utf8")
+			ctx.SetContentType(API_CONTENT_TYPE)
 			ctx.SetBodyString("{\"alive\": true}")
 			ctx.SetStatusCode(fasthttp.StatusOK)
 			return
